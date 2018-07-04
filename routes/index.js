@@ -2,91 +2,109 @@ var express = require('express');
 var router = express.Router();
 var request = require('request');
 var fs = require('fs');
+var os = require('os');
 var multer = require('multer');
 
 const port = process.env.PORT || 8910;
-console.log(port);
+var myIp;
+getMyIp();
+console.log(myIp);
+const myAddress = '' + port;
+const dnsAddress = 'http://lynx.snu.ac.kr:5511';
+const programList = ['0', '1', '2'];
 console.log(__dirname);
 
-var edgeList = {};
-var cliendList = {};
+var deviceMap = {}; // request as a client
+var deviceAvailable = {}; // record availabe devices
 
 /* GET home page. */
 router.get('/', function(req, res, next) {
-  console.log('bbb');
-  res.send(200);
   //res.render('index', { title: 'Express' });
 });
 
-router.post('/', function(req, res, next) {
-  console.log('ccc');
+/* Check EdgeServer is alive */
+router.post('/connection', function(req, res, next){
+  console.log(req.body);
+  console.log(req.connection.remoteAddress);
+  console.log(req.body.program);
+  programList.forEach((pid) => {
+    if (pid == req.body.program){
+      res.send('available');
+    }
+  });
   res.send();
-  //res.render('index', { title: 'Express' });
 });
-
+requestList();
 const baseImgPath = '../applications/hdack_opencv/data/images';
 var targetImg = 'banana.jpg';
 
-function requestEdgeList(){
-  /*
-  request.post({
-    url: 'http://lynx.snu.ac.kr:8913' + '/devicelist',
+function aliveSignal(){
+  request.put({
+    url: dnsAddress + '/devicelist/' + myAddress,
     form: {
-      address: 0,
+      port: port,
     }},
     function(err, res, body){
       if (res != undefined && res.statusCode == 200){
-        console.log(res.statusCode);
-        edgeList = body.deviceMap;
-        console.log(edgeList);
+        deviceMap = body;
+        console.log(deviceMap);
         return;
       }
       console.log('No response from DNS');
     });
-*/
+}
+
+function requestList(){
   request.get({
-    url: 'http://lynx.snu.ac.kr:8913' + '/devicelist',
+    url: dnsAddress + '/devicelist/',
   },
     function(err, res, body){
       if (res != undefined && res.statusCode == 200){
-        console.log(res.statusCode);
-        edgeList = body;
-        console.log(edgeList);
+        deviceMap = JSON.parse(body);
+        console.log(deviceMap);
+        console.log(typeof(deviceMap));
+        connection();
         return;
       }
       console.log('No response from DNS');
     });
 }
 
-router.post('/check', function(req, res, next){
-
-  console.log(req.body);
-  console.log(req.connection.remoteAddress);
-  res.send();
-});
-
-function checkConnection(url){
-  request.post({
-    url: url + '/check',
-    form: {
-      port: port,
-      program: '0'
-    }},
-    function(err, res, body){
-      if ( res != undefined && res.statusCode == 200){
-        console.log('live');
-        return;
-      }
-      console.log('failed connection with ' + url);
+function connection(){
+  deviceAvailable = {};
+  var current = Date.now();
+  Object.keys(deviceMap).forEach(function(address){
+    deviceMap[address].forEach(function(obj){
+      url = 'http://' + obj.ip + ':' + obj.port;
+      console.log(url);
+      request.post({
+        url: url + '/connection',
+        form: {
+          port: port,
+          program: '0'
+        }},
+        function(err, res, body){
+          if ( res != undefined && res.statusCode == 200){
+            console.log('live');
+            if (body == 'available' && (Date.now() < current + 10000)){ //TODO: waiting time should be decided considering device's execution time
+              console.log('available');
+              deviceAvailable[url] = {
+                available: true, //TODO: use program id to identify available devices
+              };
+            }
+            return;
+          }
+          console.log('failed connection with ' + url);
+        });
     });
+  });
 }
 
-function sendInputData(url){
+function sendInput(url, img){
   request.post({
-    url: url,
+    url: url + '/input/',
     form: {
-      address: 0,
-      port: 8910,
+      uri: myIp + '/images/' + img
     }}
   );
 }
@@ -100,11 +118,33 @@ function download(uri, filename, callback){
   });
 };
 
+function getMyIp(){
+  var ifaces = os.networkInterfaces();
+  Object.keys(ifaces).forEach(function(ifname){
+    var alias = 0;
+    ifaces[ifname].forEach(function(iface){
+      if('IPv4' !== iface.family || iface.internal !== false){
+        return;
+      }
+      if (alias >= 1){
+        console.log('1' + iface.address);
+      }
+      else {
+        myIp = 'http://' + iface.address + ':' + port;
+      }
+      ++alias;
+    });
+  });
+}
+
+/*
 download('http://lynx.snu.ac.kr:8913/images/banana.jpg', 'save.jpg', function(){
     console.log('done');
 });
+*/
 
 //requestEdgeList();
 //checkConnection('http://lynx.snu.ac.kr:8913');
+//sendInput(dnsAddress, 'banana.jpg');
 
 module.exports = router;
