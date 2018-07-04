@@ -6,11 +6,11 @@ var os = require('os');
 var multer = require('multer');
 
 const port = process.env.PORT || 8910;
-var myIp;
-getMyIp();
+var myIp = 'http://192.168.0.9';
+//getMyIp();
 console.log(myIp);
 const myAddress = '' + port;
-const dnsAddress = 'http://lynx.snu.ac.kr:5511';
+const dnsAddress = myIp + ':5511';
 const programList = ['0', '1', '2'];
 console.log(__dirname);
 
@@ -26,10 +26,12 @@ router.get('/', function(req, res, next) {
 router.post('/connection', function(req, res, next){
   console.log(req.body);
   console.log(req.connection.remoteAddress);
-  console.log(req.body.program);
   programList.forEach((pid) => {
     if (pid == req.body.program){
-      res.send('available');
+      res.send({
+        msg: 'available',
+        url: myIp + ':' + port
+      });
     }
   });
   res.send();
@@ -64,12 +66,17 @@ function aliveSignal(){
       if (res != undefined && res.statusCode == 200){
         deviceMap = body;
         console.log(deviceMap);
-        setInterval(aliveSignal(), 5000);
+        setTimeout(() => {
+          console.log('I\'m alive.');
+          aliveSignal();
+        }, 5000);
         return;
       }
       console.log('No response from DNS');
     });
 }
+
+aliveSignal();
 
 /* get device list from DNS server */
 function requestList(){
@@ -80,7 +87,6 @@ function requestList(){
       if (res != undefined && res.statusCode == 200){
         deviceMap = JSON.parse(body);
         console.log(deviceMap);
-        console.log(typeof(deviceMap));
         return;
       }
       console.log('No response from DNS');
@@ -103,13 +109,12 @@ function connection(){
         }},
         function(err, res, body){
           if ( res != undefined && res.statusCode == 200){
-            console.log('live');
-            if (body == 'available' && (Date.now() < current + 10000)){ //TODO: waiting time should be decided considering device's execution time
+            if (body.msg == 'available' && (Date.now() < current + 10000)){ //TODO: waiting time should be decided considering device's execution time
               console.log('available');
-              deviceAvailable[url] = {
+              deviceAvailable[body.url] = {
                 available: true, //TODO: use program id to identify available devices
               };
-              //sendInput('http://lynx.snu.ac.kr:8913', 'banana.jpg');
+              sendInput('banana.jpg');
             }
             return;
           }

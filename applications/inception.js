@@ -61,6 +61,7 @@ const run = (image) => {
   return predictions;
 }
 
+
 module.exports = {
   run: run,
 }
