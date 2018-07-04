@@ -34,10 +34,26 @@ router.post('/connection', function(req, res, next){
   });
   res.send();
 });
-requestList();
-const baseImgPath = '../applications/hdack_opencv/data/images';
-var targetImg = 'banana.jpg';
 
+const baseProgramPath = '../applications/';
+const downloadPath = './public/input/';
+
+router.post('/input', function(req, res, next){
+  download(req.body.uri, downloadPath + req.body.title, () => {
+    console.log('target image : ' + req.body.title);
+    const program = require(baseProgramPath + '/' + 'inception.js');
+    var time = Date.now();
+    var output = program.run( downloadPath + req.body.title);
+    time = Date.now() - time;
+    console.log('execution time : ' + time + ' ms');
+    res.send({
+      output: output,
+      time: time,
+    });
+  });
+});
+
+/* announce liveness */
 function aliveSignal(){
   request.put({
     url: dnsAddress + '/devicelist/' + myAddress,
@@ -48,12 +64,14 @@ function aliveSignal(){
       if (res != undefined && res.statusCode == 200){
         deviceMap = body;
         console.log(deviceMap);
+        setInterval(aliveSignal(), 5000);
         return;
       }
       console.log('No response from DNS');
     });
 }
 
+/* get device list from DNS server */
 function requestList(){
   request.get({
     url: dnsAddress + '/devicelist/',
@@ -63,13 +81,13 @@ function requestList(){
         deviceMap = JSON.parse(body);
         console.log(deviceMap);
         console.log(typeof(deviceMap));
-        connection();
         return;
       }
       console.log('No response from DNS');
     });
 }
 
+/* make a query to Edge devices if they are available */
 function connection(){
   deviceAvailable = {};
   var current = Date.now();
@@ -91,6 +109,7 @@ function connection(){
               deviceAvailable[url] = {
                 available: true, //TODO: use program id to identify available devices
               };
+              //sendInput('http://lynx.snu.ac.kr:8913', 'banana.jpg');
             }
             return;
           }
@@ -100,13 +119,18 @@ function connection(){
   });
 }
 
-function sendInput(url, img){
-  request.post({
-    url: url + '/input/',
-    form: {
-      uri: myIp + '/images/' + img
-    }}
-  );
+/* send input data to available edge devices */
+function sendInput(img){
+  Object.keys(deviceAvailable).forEach(function(url){
+    request.post({
+      url: url + '/input/',
+      form: {
+        uri: myIp + '/images/' + img,
+        title: img,
+      }}, function(err, res, body){
+        console.log(body);
+      });
+  });
 }
 
 function download(uri, filename, callback){
@@ -136,15 +160,5 @@ function getMyIp(){
     });
   });
 }
-
-/*
-download('http://lynx.snu.ac.kr:8913/images/banana.jpg', 'save.jpg', function(){
-    console.log('done');
-});
-*/
-
-//requestEdgeList();
-//checkConnection('http://lynx.snu.ac.kr:8913');
-//sendInput(dnsAddress, 'banana.jpg');
 
 module.exports = router;
