@@ -5,21 +5,22 @@ var fs = require('fs');
 var os = require('os');
 var multer = require('multer');
 
+
+var imagenum = 0;
 const port = process.env.PORT || 8910;
-var myIp;
-getMyIp();
-console.log(myIp);
+var myIp = 'http://192.168.0.7';
 const myAddress = '' + port;
-const dnsAddress = 'http://lynx.snu.ac.kr:5511';
+const dnsAddress = 'http://192.168.0.9:5511';
 const programList = ['0', '1', '2'];
 console.log(__dirname);
+var send_s, send_e;
 
 var deviceMap = {}; // request as a client
 var deviceAvailable = {}; // record availabe devices
 
 /* GET home page. */
 router.get('/', function(req, res, next) {
-  //res.render('index', { title: 'Express' });
+  res.render('index', { title: 'Express' });
 });
 
 /* Check EdgeServer is alive */
@@ -29,7 +30,10 @@ router.post('/connection', function(req, res, next){
   console.log(req.body.program);
   programList.forEach((pid) => {
     if (pid == req.body.program){
-      res.send('available');
+      res.send({
+          msg: 'available',
+          url: myIp,
+        });
     }
   });
   res.send();
@@ -73,6 +77,7 @@ function aliveSignal(){
 
 /* get device list from DNS server */
 function requestList(){
+    console.log(dnsAddress);
   request.get({
     url: dnsAddress + '/devicelist/',
   },
@@ -80,12 +85,13 @@ function requestList(){
       if (res != undefined && res.statusCode == 200){
         deviceMap = JSON.parse(body);
         console.log(deviceMap);
-        console.log(typeof(deviceMap));
+	    connection();
         return;
       }
       console.log('No response from DNS');
     });
 }
+requestList();
 
 /* make a query to Edge devices if they are available */
 function connection(){
@@ -94,7 +100,6 @@ function connection(){
   Object.keys(deviceMap).forEach(function(address){
     deviceMap[address].forEach(function(obj){
       url = 'http://' + obj.ip + ':' + obj.port;
-      console.log(url);
       request.post({
         url: url + '/connection',
         form: {
@@ -102,14 +107,17 @@ function connection(){
           program: '0'
         }},
         function(err, res, body){
+            body = JSON.parse(body);
           if ( res != undefined && res.statusCode == 200){
-            console.log('live');
-            if (body == 'available' && (Date.now() < current + 10000)){ //TODO: waiting time should be decided considering device's execution time
-              console.log('available');
-              deviceAvailable[url] = {
+            if (body.msg == 'available' && (Date.now() < current + 10000)){ //TODO: waiting time should be decided considering device's execution time
+              console.log('available : ' + body.url);
+              deviceAvailable[body.url] = {
                 available: true, //TODO: use program id to identify available devices
               };
-              //sendInput('http://lynx.snu.ac.kr:8913', 'banana.jpg');
+		      console.log(deviceAvailable);
+              //sendInput('banana.jpg');
+              send_s = Date.now();
+              sendInput(''+imagenum+'.jpg');
             }
             return;
           }
@@ -125,10 +133,17 @@ function sendInput(img){
     request.post({
       url: url + '/input/',
       form: {
-        uri: myIp + '/images/' + img,
+          uri: myIp + ':' + port + '/images/' + img, //:port ->myIp
         title: img,
       }}, function(err, res, body){
+              send_e = Date.now();
+              console.log('execution time : ' + (send_e - send_s));
+              send_s = send_e;
         console.log(body);
+        if (imagenum < 9) { 
+            imagenum++
+            sendInput(''+imagenum+'.jpg');
+        }
       });
   });
 }

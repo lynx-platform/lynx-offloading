@@ -3,8 +3,8 @@ const path = require('path');
 const fs = require('fs');
 
 // replace with path where you unzipped inception model
-const inceptionModelPath = './applications/data/model/inception'
-//const inceptionModelPath = './data/model/inception'
+//const inceptionModelPath = './applications/data/model/inception'
+const inceptionModelPath = './data/model/inception'
 
 const modelFile = path.resolve(inceptionModelPath, 'tensorflow_inception_graph.pb');
 const classNamesFile = path.resolve(inceptionModelPath, 'imagenet_comp_graph_label_strings.txt');
@@ -63,6 +63,9 @@ const run = (image) => {
 }
 
 //run('./data/images/banana.jpg');
+console.time('a');
+run('./data/images/0.jpg');
+console.timeEnd('a');
 
 module.exports = {
   run: run,
